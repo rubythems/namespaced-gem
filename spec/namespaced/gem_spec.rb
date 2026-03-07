@@ -29,6 +29,18 @@ RSpec.describe Namespaced::Gem do
     expect(Namespaced::Gem::GemResolverPatch).to be_a(Module)
   end
 
+  it "exposes NamespaceSourceRegistry" do
+    expect(Namespaced::Gem::NamespaceSourceRegistry).to be_a(Module)
+  end
+
+  it "exposes ApiSpecPatch" do
+    expect(Namespaced::Gem::ApiSpecPatch).to be_a(Module)
+  end
+
+  it "exposes DownloadPatch" do
+    expect(Namespaced::Gem::DownloadPatch).to be_a(Module)
+  end
+
   it "defines a custom Error class" do
     expect(Namespaced::Gem::Error).to be < StandardError
   end

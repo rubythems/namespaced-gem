@@ -2,7 +2,10 @@
 
 require_relative "gem/version"
 require_relative "gem/uri_dependency"
+require_relative "gem/namespace_source_registry"
 require_relative "gem/dependency_patch"
+require_relative "gem/api_spec_patch"
+require_relative "gem/download_patch"
 require_relative "gem/bundler_integration"
 require_relative "gem/bundler_resolver_patch"
 require_relative "gem/gem_resolver_patch"

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "uri_dependency"
+require_relative "namespace_source_registry"
 
 module Namespaced
   module Gem
@@ -47,6 +48,7 @@ module Namespaced
             unless uri_sets.key?(uri_dep.source_url)
               begin
                 src = ::Gem::Source.new(uri_dep.source_url)
+                Namespaced::Gem::NamespaceSourceRegistry.register(uri_dep.source_url)
                 uri_sets[uri_dep.source_url] = src.dependency_resolver_set
               rescue StandardError => e
                 raise Namespaced::Gem::Error,
@@ -96,6 +98,7 @@ module Namespaced
           @_namespaced_resolver_sets ||= {}
           @_namespaced_resolver_sets[source_url] ||= begin
             src = ::Gem::Source.new(source_url)
+            Namespaced::Gem::NamespaceSourceRegistry.register(source_url)
             src.dependency_resolver_set
           end
         end
