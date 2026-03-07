@@ -24,6 +24,8 @@ module Namespaced
     #      as transitive deps during resolution by remapping to real gem names
     #      and registering the namespace source in @source_requirements.
     module BundlerResolverPatch
+      @mutex = Mutex.new
+
       def self.apply!
         return unless defined?(::Bundler)
         return if ::Bundler::Definition.instance_variable_get(:@namespaced_gem_resolver_patched)
@@ -37,28 +39,37 @@ module Namespaced
         if defined?(::Bundler::Definition)
           apply!
         else
-          trace = TracePoint.new(:end) do |tp|
-            next unless tp.self == ::Bundler::Definition rescue next
+          @mutex.synchronize do
+            return if @trace_installed
 
-            apply!
-            trace.disable
+            trace = TracePoint.new(:end) do |tp|
+              next unless tp.self == ::Bundler::Definition rescue next
+
+              apply!
+              trace.disable
+            end
+            trace.enable
+            @trace_installed = true
           end
-          trace.enable
         end
       end
 
       # Patched into Bundler::Definition to remap URI deps in @dependencies
       # (the deps that come directly from the Gemfile / gemspec DSL).
+      #
+      # Uses Ruby 3.2+ argument forwarding (`...`) so we are not coupled to
+      # the exact positional-arg list of Bundler::Definition#initialize, which
+      # varies across Bundler releases.
       module DefinitionPatch
-        def initialize(lockfile, dependencies, sources, unlock, ruby_version = nil, optional_groups = [], gemfiles = [])
-          remapped, new_sources = remap_uri_dependencies(dependencies, sources)
+        def initialize(lockfile, dependencies, sources, ...)
+          remapped, new_sources = remap_uri_dependencies(dependencies)
           new_sources.each { |src| sources.add_rubygems_source("remotes" => [src]) }
-          super(lockfile, remapped, sources, unlock, ruby_version, optional_groups, gemfiles)
+          super(lockfile, remapped, sources, ...)
         end
 
         private
 
-        def remap_uri_dependencies(dependencies, _sources)
+        def remap_uri_dependencies(dependencies)
           new_sources = []
           remapped = dependencies.map do |dep|
             next dep unless Namespaced::Gem::UriDependency.uri?(dep.name)

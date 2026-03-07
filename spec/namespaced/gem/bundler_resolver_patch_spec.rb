@@ -30,7 +30,7 @@ RSpec.describe Namespaced::Gem::BundlerResolverPatch do
     let(:plain_dep) { ::Bundler::Dependency.new("rack", ">= 2.0") }
 
     def remap(deps)
-      test_host.send(:remap_uri_dependencies, deps, double("sources"))
+      test_host.send(:remap_uri_dependencies, deps)
     end
 
     it "remaps URI deps to real gem names" do
@@ -122,4 +122,3 @@ RSpec.describe Namespaced::Gem::BundlerResolverPatch do
     end
   end
 end
-

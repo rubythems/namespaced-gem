@@ -1,6 +1,81 @@
 module Namespaced
   module Gem
     VERSION: String
-    # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+    class Error < StandardError
+    end
+
+    class UriDependency
+      DEFAULT_SERVER: String
+      FULL_URI_PATTERN: Regexp
+      SHORTHAND_PATTERN: Regexp
+
+      attr_reader original: String
+      attr_reader server_base: String
+      attr_reader namespace: String
+      attr_reader gem_name: String
+
+      def self.uri?: (untyped name) -> bool
+      def self.parse: (String name) -> UriDependency
+
+      def initialize: (String name) -> void
+
+      def source_url: () -> String
+      def ==: (untyped other) -> bool
+      alias eql? ==
+      def hash: () -> Integer
+      def to_s: () -> String
+      def inspect: () -> String
+    end
+
+    module DependencyPatch
+      def self.apply!: () -> void
+
+      module InstanceMethods
+        def uri_gem?: () -> bool
+        def uri_dependency: () -> UriDependency?
+      end
+    end
+
+    module BundlerIntegration
+      def self.apply!: () -> void
+      def self.apply_when_ready!: () -> void
+
+      module DslPatch
+        def gemspec: (?Hash[Symbol, untyped]? opts) -> void
+
+        private def inject_uri_sources_for: (Gem::Specification spec) -> void
+      end
+    end
+
+    module BundlerResolverPatch
+      def self.apply!: () -> void
+      def self.apply_when_ready!: () -> void
+
+      module DefinitionPatch
+        def initialize: (untyped lockfile, Array[untyped] dependencies, untyped sources, *untyped) -> void
+
+        private def remap_uri_dependencies: (Array[untyped] dependencies) -> [Array[untyped], Array[String]]
+        private def dep_options_for: (untyped dep, String source_url) -> Hash[String, untyped]
+      end
+
+      module ResolverPatch
+        def to_dependency_hash: (Array[untyped] dependencies, untyped packages) -> untyped
+      end
+    end
+
+    module GemResolverPatch
+      def self.apply!: () -> void
+
+      module RequestSetPatch
+        def resolve: (?untyped set) -> untyped
+      end
+
+      module InstallerSetPatch
+        def find_all: (untyped req) -> Array[untyped]
+
+        private def _namespaced_resolver_set: (String source_url) -> untyped
+      end
+    end
   end
 end

@@ -1,10 +1,10 @@
 # namespaced-gem
 
-A RubyGems plugin prototype that enables gemspec dependencies to be declared as
+A RubyGems plugin that enables gemspec dependencies to be declared as
 full URIs, pointing to **namespaced gem sources** such as
 [gem.coop namespaces](https://gem.coop/updates/5/).
 
-This is a feasibility exploration of the ideas discussed in
+This implements the ideas discussed in
 [gem-coop/gem.coop#12](https://github.com/gem-coop/gem.coop/issues/12).
 
 ---
@@ -39,24 +39,26 @@ spec.add_dependency "https://beta.gem.coop/@myspace/my-gem", "~> 1.0"
 
 ---
 
-## Key Finding: RubyGems 4.0.5+ Already Accepts URI Names
+## Key Finding: RubyGems 4.0.5+ Happens to Allow URI Names
 
-When we set out to write this prototype, we expected to need to widen the
-`Gem::Dependency::VALID_NAME_PATTERN` regex. However, **RubyGems 4.0.5 removed
-the name pattern restriction entirely** — any String is now a valid dependency
-name:
+RubyGems 4.0.5 removed the old `Gem::Dependency::VALID_NAME_PATTERN`
+restriction entirely — any String is now accepted as a dependency name:
 
 ```ruby
 dep = Gem::Dependency.new("https://beta.gem.coop/@ns/foo", "~> 1.0")
 dep.name  # => "https://beta.gem.coop/@ns/foo"
 ```
 
-This means **the gemspec side is already feasible** on modern Ruby. The
-remaining challenge is the **Bundler resolution side**: Bundler needs to know
-which source server to use when resolving a URI-named dependency.
+However, **RubyGems has no idea what to do with a URI-named dependency.** It
+will happily store the string, but `gem install` will try to look up that
+literal name on rubygems.org — and fail. Neither RubyGems nor Bundler knows
+how to extract the real gem name, derive the namespace source URL, or resolve
+transitive dependencies that use URI names.
 
-For older RubyGems (< 4.0.5), this gem provides a backward-compatible patch
-that widens `VALID_NAME_PATTERN` to also permit URIs.
+**This gem bridges that gap.** It teaches both RubyGems' resolver (`gem
+install`) and Bundler's resolver (`bundle install`) how to parse URI dependency
+names, route them to the correct namespace source, and remap transitive deps
+on the fly.
 
 ---
 
@@ -67,9 +69,8 @@ at boot — before any gemspec is parsed.
 
 ### 1. `Gem::Dependency` patch (`DependencyPatch`)
 
-- On older RubyGems: widens `VALID_NAME_PATTERN` to allow URI characters.
-- On all versions: prepends helper methods `#uri_gem?` and `#uri_dependency`
-  onto `Gem::Dependency`.
+Prepends helper methods `#uri_gem?` and `#uri_dependency` onto
+`Gem::Dependency`.
 
 ```ruby
 dep = Gem::Dependency.new("https://beta.gem.coop/@myspace/my-gem", "~> 1.0")
@@ -165,35 +166,43 @@ lib/
     gem.rb                        # Main module
     gem/
       version.rb
-      uri_dependency.rb           # URI parser
-      dependency_patch.rb         # Gem::Dependency patch (helper methods + old RubyGems compat)
+      uri_dependency.rb           # URI parser (value object)
+      dependency_patch.rb         # Gem::Dependency patch (helper methods)
       bundler_integration.rb      # Bundler::Dsl#gemspec patch
+      bundler_resolver_patch.rb   # Bundler::Definition / Resolver transitive dep handling
+      gem_resolver_patch.rb       # Gem::RequestSet / InstallerSet for `gem install`
 ```
 
 ---
 
-## Known Limitations & Open Questions
+## Known Limitations
 
-1. **Ordering constraint**: The plugin must be *installed* (not just in Gemfile)
-   for the patch to fire before Bundler reads the gemspec. If this gem is only
-   listed in the Gemfile, RubyGems loads the plugin at Bundler boot which may
-   still be early enough — but this needs more testing.
+1. **Plugin must be installed as a gem.** This gem works as a RubyGems plugin
+   (`rubygems_plugin.rb`), which means it must be *installed* — not just listed
+   in a Gemfile — so that RubyGems loads the plugin at boot before any gemspec
+   is evaluated. In Ruby 4.0+, RubyGems auto-loads `bundler/setup` when it
+   detects a Gemfile in the working directory, and this happens *before*
+   `RUBYOPT` `-r` flags are processed. The plugin must already be in the gem
+   path to intercept in time.
 
-2. **Lock file**: URI-sourced deps will appear as remote sources in
-   `Gemfile.lock`. This may require Bundler to be aware of the source. Initial
-   testing suggests it works correctly since we inject proper `source` blocks.
+2. **Gemspec linting:** Tools that validate gemspecs (e.g. `gem build`, `rake
+   release`) work fine because `SpecificationPolicy#validate_name` only
+   validates the gem's *own* name — it does not check dependency names.
 
-3. **Gemspec linting**: Tools that validate gemspecs (e.g. `gem build`, `rake
-   release`) should work fine on RubyGems ≥ 4.0.5. On older RubyGems, the
-   `SpecificationPolicy#validate_name` only validates the gem's *own* name
-   (not its dependencies), so URI deps won't trigger that check.
+---
 
-4. **Version constraints**: Version requirements work as normal since they are
-   the second argument to `add_dependency`, separate from the name.
+## Version Constraints
 
-5. **Upstream path**: The cleanest solution would be Bundler/RubyGems natively
-   supporting a `source:` keyword in `add_dependency`. This prototype
-   demonstrates the feasibility of a shim while that support is being developed.
+Version requirements work exactly as they always have — they are the second
+argument to `add_dependency`, completely separate from the name:
+
+```ruby
+spec.add_dependency "https://beta.gem.coop/@myspace/my-gem", "~> 1.0"
+#                    ^^^^^^^^^^ URI name ^^^^^^^^^^^^^^^^^^   ^^^^^^^^
+#                                                             version
+```
+
+All standard operators (`~>`, `>=`, `=`, etc.) are supported unchanged.
 
 ---
 
@@ -201,9 +210,15 @@ lib/
 
 ```bash
 bundle install
-bundle exec rake spec    # run tests
-bundle exec rake         # tests + rubocop
+bundle exec rspec              # unit + offline integration tests
+bundle exec rspec --tag network  # network integration tests (hits beta.gem.coop)
+bundle exec rake               # tests + rubocop
 ```
+
+The network integration tests resolve a real gem (`@kaspth/oaken`) from
+`beta.gem.coop` and verify `bundle lock` produces a correct `Gemfile.lock`.
+They are excluded from the default `rspec` run and must be opted into with
+`--tag network`.
 
 ---
 
@@ -221,4 +236,3 @@ contributors are expected to adhere to the
 Everyone interacting in the namespaced-gem project's codebases, issue trackers,
 chat rooms and mailing lists is expected to follow the
 [code of conduct](https://gitlab.com/galtzo-floss/namespaced-gem/-/blob/main/CODE_OF_CONDUCT.md).
-

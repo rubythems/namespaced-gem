@@ -23,6 +23,20 @@ RSpec.describe Namespaced::Gem::BundlerIntegration do
         expect { described_class.apply! }.not_to raise_error
         expect { described_class.apply! }.not_to raise_error
       end
+
+      it "sets the patched flag after prepending" do
+        described_class.apply!
+        expect(::Bundler::Dsl.instance_variable_get(:@namespaced_gem_patched)).to be true
+      end
+    end
+  end
+
+  describe ".apply_when_ready!" do
+    context "when Bundler::Dsl is already loaded" do
+      it "applies the patch immediately" do
+        described_class.apply_when_ready!
+        expect(::Bundler::Dsl.ancestors).to include(described_class::DslPatch)
+      end
     end
   end
 
@@ -78,6 +92,73 @@ RSpec.describe Namespaced::Gem::BundlerIntegration do
 
       # Only the one URI dep should trigger a source injection; rack should not
       expect(injected_sources.length).to eq(1)
+    end
+
+    context "with multiple URI deps from different namespaces" do
+      let(:spec_with_multiple_uri_deps) do
+        ::Gem::Specification.new do |s|
+          s.name    = "multi-dep-example"
+          s.version = "0.2.0"
+          s.summary = "example"
+          s.add_dependency "https://beta.gem.coop/@alice/gem-a", "~> 1.0"
+          s.add_dependency "https://beta.gem.coop/@bob/gem-b", ">= 2.0"
+          s.add_dependency "rack", "~> 3.0"
+        end
+      end
+
+      it "injects separate source blocks for each namespace" do
+        dsl = ::Bundler::Dsl.new
+
+        injected_sources = []
+        injected_gems = []
+
+        allow(dsl).to receive(:source) do |url, &block|
+          injected_sources << url
+          allow(dsl).to receive(:gem) { |name, *reqs| injected_gems << [name, reqs] }
+          dsl.instance_eval(&block) if block
+        end
+
+        dsl.send(:inject_uri_sources_for, spec_with_multiple_uri_deps)
+
+        expect(injected_sources).to contain_exactly(
+          "https://beta.gem.coop/@alice",
+          "https://beta.gem.coop/@bob"
+        )
+        expect(injected_gems.map(&:first)).to contain_exactly("gem-a", "gem-b")
+      end
+    end
+
+    context "with multiple URI deps from the same namespace" do
+      let(:spec_with_same_ns_deps) do
+        ::Gem::Specification.new do |s|
+          s.name    = "same-ns-example"
+          s.version = "0.3.0"
+          s.summary = "example"
+          s.add_dependency "https://beta.gem.coop/@myspace/gem-one", "~> 1.0"
+          s.add_dependency "https://beta.gem.coop/@myspace/gem-two", "~> 2.0"
+        end
+      end
+
+      it "injects a source call for each dep even from the same namespace" do
+        dsl = ::Bundler::Dsl.new
+
+        injected_sources = []
+        injected_gems = []
+
+        allow(dsl).to receive(:source) do |url, &block|
+          injected_sources << url
+          allow(dsl).to receive(:gem) { |name, *reqs| injected_gems << [name, reqs] }
+          dsl.instance_eval(&block) if block
+        end
+
+        dsl.send(:inject_uri_sources_for, spec_with_same_ns_deps)
+
+        expect(injected_sources).to eq([
+          "https://beta.gem.coop/@myspace",
+          "https://beta.gem.coop/@myspace"
+        ])
+        expect(injected_gems.map(&:first)).to eq(["gem-one", "gem-two"])
+      end
     end
   end
 end

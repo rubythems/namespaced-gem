@@ -27,13 +27,15 @@ module Namespaced
     #
     # This means the Gemfile requires no manual source declarations for URI deps.
     module BundlerIntegration
+      @mutex = Mutex.new
+
       # Apply the patch to Bundler::Dsl. Safe to call multiple times (idempotent).
       def self.apply!
         return unless defined?(::Bundler::Dsl)
         return if ::Bundler::Dsl.instance_variable_get(:@namespaced_gem_patched)
 
-        ::Bundler::Dsl.instance_variable_set(:@namespaced_gem_patched, true)
         ::Bundler::Dsl.prepend(DslPatch)
+        ::Bundler::Dsl.instance_variable_set(:@namespaced_gem_patched, true)
       end
 
       # Tries to apply the patch now; if Bundler isn't loaded yet, registers a
@@ -42,20 +44,26 @@ module Namespaced
         if defined?(::Bundler::Dsl)
           apply!
         else
-          # Bundler loads lazily in some contexts (e.g. plain `gem` commands).
-          # We install a trace that fires on the first Bundler::Dsl class load.
-          trace = TracePoint.new(:class) do |tp|
-            dsl_loaded = begin
-              tp.self == ::Bundler::Dsl
-            rescue StandardError
-              false
+          @mutex.synchronize do
+            # Re-check after acquiring lock (another thread may have set it up).
+            return if @trace_installed
+
+            # Bundler loads lazily in some contexts (e.g. plain `gem` commands).
+            # We install a trace that fires on the first Bundler::Dsl class load.
+            trace = TracePoint.new(:class) do |tp|
+              dsl_loaded = begin
+                tp.self == ::Bundler::Dsl
+              rescue StandardError
+                false
+              end
+              if dsl_loaded
+                apply!
+                trace.disable
+              end
             end
-            if dsl_loaded
-              apply!
-              trace.disable
-            end
+            trace.enable
+            @trace_installed = true
           end
-          trace.enable
         end
       end
 

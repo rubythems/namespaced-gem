@@ -20,20 +20,20 @@ module Namespaced
       # e.g. https://beta.gem.coop/@namespace/gem-name
       FULL_URI_PATTERN = %r{
         \A
-        (https?://[^/]+)    # server base, e.g. https://beta.gem.coop
+        (https?://[^/]+)      # server base, e.g. https://beta.gem.coop
         /
-        (@[^/]+)            # namespace, e.g. @myspace
+        (@[^/]+)              # namespace, e.g. @myspace
         /
-        ([a-zA-Z0-9_\-]+)  # gem name
+        ([a-zA-Z0-9._\-]+)   # gem name (dots allowed per RubyGems convention)
         \z
       }x
 
       # Shorthand: @namespace/gem-name (no server; defaults to gem.coop)
       SHORTHAND_PATTERN = %r{
         \A
-        (@[^/]+)            # namespace, e.g. @myspace
+        (@[^/]+)              # namespace, e.g. @myspace
         /
-        ([a-zA-Z0-9_\-]+)  # gem name
+        ([a-zA-Z0-9._\-]+)   # gem name (dots allowed per RubyGems convention)
         \z
       }x
 
@@ -52,25 +52,42 @@ module Namespaced
       end
 
       def initialize(name)
-        @original = name
+        @original = -String(name)
 
-        if (m = FULL_URI_PATTERN.match(name))
-          @server_base = m[1]
-          @namespace   = m[2]
-          @gem_name    = m[3]
-        elsif (m = SHORTHAND_PATTERN.match(name))
+        if (m = FULL_URI_PATTERN.match(@original))
+          @server_base = -m[1]
+          @namespace   = -m[2]
+          @gem_name    = -m[3]
+        elsif (m = SHORTHAND_PATTERN.match(@original))
           @server_base = DEFAULT_SERVER
-          @namespace   = m[1]
-          @gem_name    = m[2]
+          @namespace   = -m[1]
+          @gem_name    = -m[2]
         else
           raise ArgumentError, "Not a valid URI dependency: #{name.inspect}"
         end
+
+        freeze
       end
 
       # The Bundler source URL for this dependency's namespace.
       # This is what you'd put in a Gemfile `source` block.
       def source_url
         "#{server_base}/#{namespace}"
+      end
+
+      # Value equality — two UriDependency objects are equal when they refer
+      # to the same gem in the same namespace on the same server.
+      def ==(other)
+        other.is_a?(self.class) &&
+          server_base == other.server_base &&
+          namespace == other.namespace &&
+          gem_name == other.gem_name
+      end
+
+      alias eql? ==
+
+      def hash
+        [self.class, server_base, namespace, gem_name].hash
       end
 
       def to_s

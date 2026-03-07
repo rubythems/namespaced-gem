@@ -18,6 +18,10 @@ RSpec.describe Namespaced::Gem::GemResolverPatch do
     it "prepends InstallerSetPatch onto Gem::Resolver::InstallerSet" do
       expect(::Gem::Resolver::InstallerSet.ancestors).to include(described_class::InstallerSetPatch)
     end
+
+    it "sets the patched flag on Gem::RequestSet" do
+      expect(::Gem::RequestSet.instance_variable_get(:@namespaced_gem_patched)).to be true
+    end
   end
 
   describe "InstallerSetPatch#find_all" do
@@ -85,6 +89,44 @@ RSpec.describe Namespaced::Gem::GemResolverPatch do
         expect(received_req.name).to eq("foo")
         expect(received_req.dependency.requirement.as_list).to eq(["~> 2.0"])
       end
+
+      it "caches resolver sets for the same source URL" do
+        # First request — should create a new Gem::Source
+        src_double = instance_double(::Gem::Source)
+        rset_double = double("resolver_set", find_all: [])
+
+        expect(::Gem::Source).to receive(:new)
+          .with("https://beta.gem.coop/@pboling")
+          .once
+          .and_return(src_double)
+        allow(src_double).to receive(:dependency_resolver_set).and_return(rset_double)
+
+        dep1 = ::Gem::Dependency.new(uri, "~> 1.0")
+        req1 = ::Gem::Resolver::DependencyRequest.new(dep1, nil)
+        installer_set.find_all(req1)
+
+        # Second request with same source — should NOT create a new Gem::Source
+        dep2 = ::Gem::Dependency.new("https://beta.gem.coop/@pboling/bar", ">= 0")
+        req2 = ::Gem::Resolver::DependencyRequest.new(dep2, nil)
+        installer_set.find_all(req2)
+      end
+
+      it "wraps errors in Namespaced::Gem::Error" do
+        src_double = instance_double(::Gem::Source)
+        allow(::Gem::Source).to receive(:new)
+          .with("https://beta.gem.coop/@pboling")
+          .and_return(src_double)
+        allow(src_double).to receive(:dependency_resolver_set)
+          .and_raise(::Gem::RemoteFetcher::FetchError.new("connection refused", "https://beta.gem.coop/@pboling"))
+
+        dep = ::Gem::Dependency.new(uri, "~> 1.0")
+        req = ::Gem::Resolver::DependencyRequest.new(dep, nil)
+
+        expect { installer_set.find_all(req) }.to raise_error(
+          Namespaced::Gem::Error,
+          /Failed to resolve URI dependency/
+        )
+      end
     end
   end
 
@@ -134,6 +176,23 @@ RSpec.describe Namespaced::Gem::GemResolverPatch do
 
         sets = request_set.instance_variable_get(:@sets)
         expect(sets).to include(rset)
+      end
+
+      it "wraps source creation errors in Namespaced::Gem::Error" do
+        allow(::Gem::Source).to receive(:new).and_call_original
+        src_double = instance_double(::Gem::Source)
+        allow(::Gem::Source).to receive(:new)
+          .with("https://beta.gem.coop/@pboling")
+          .and_return(src_double)
+        allow(src_double).to receive(:dependency_resolver_set)
+          .and_raise(StandardError.new("connection refused"))
+
+        request_set = ::Gem::RequestSet.new(::Gem::Dependency.new(uri, "~> 1.0"))
+
+        expect { request_set.resolve }.to raise_error(
+          Namespaced::Gem::Error,
+          /Failed to create resolver set/
+        )
       end
     end
 

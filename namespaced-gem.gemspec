@@ -10,20 +10,21 @@ Gem::Specification.new do |spec|
 
   spec.summary = "RubyGems plugin enabling URI-style gemspec dependencies for namespaced gem sources (e.g. gem.coop namespaces)."
   spec.description = <<~DESC
-    A RubyGems plugin/shim prototype that allows gemspec dependencies to be
-    declared as full URIs pointing to namespaced gem sources such as gem.coop
-    namespaces (e.g. `https://beta.gem.coop/@myspace/my-gem`).
+    A RubyGems plugin that allows gemspec dependencies to be declared as full
+    URIs pointing to namespaced gem sources such as gem.coop namespaces
+    (e.g. `https://beta.gem.coop/@myspace/my-gem`).
 
     When installed, this gem patches Gem::Dependency to accept URI-style names
     and patches Bundler::Dsl to automatically inject the correct `source` blocks
     when processing gemspecs — so the consuming project's Gemfile needs no
     manual source declarations for URI-specified dependencies.
 
-    This is a feasibility prototype exploring the approach described in
-    https://github.com/gem-coop/gem.coop/issues/12.
+    See https://github.com/gem-coop/gem.coop/issues/12 for the original discussion.
   DESC
   spec.homepage = "https://gitlab.com/galtzo-floss/namespaced-gem"
+  spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
+  spec.required_rubygems_version = ">= 4.0.5"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage

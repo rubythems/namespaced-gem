@@ -45,8 +45,13 @@ module Namespaced
             # resolver set (APISet if the server supports compact index, else
             # IndexSet).  Cache per source_url to avoid duplicate queries.
             unless uri_sets.key?(uri_dep.source_url)
-              src = ::Gem::Source.new(uri_dep.source_url)
-              uri_sets[uri_dep.source_url] = src.dependency_resolver_set
+              begin
+                src = ::Gem::Source.new(uri_dep.source_url)
+                uri_sets[uri_dep.source_url] = src.dependency_resolver_set
+              rescue StandardError => e
+                raise Namespaced::Gem::Error,
+                      "Failed to create resolver set for #{uri_dep.source_url.inspect}: #{e.message}"
+              end
             end
 
             ::Gem::Dependency.new(uri_dep.gem_name, dep.requirement, dep.type)
@@ -71,14 +76,28 @@ module Namespaced
           return super unless Namespaced::Gem::UriDependency.uri?(req.name)
 
           uri_dep = Namespaced::Gem::UriDependency.parse(req.name)
-          src = ::Gem::Source.new(uri_dep.source_url)
-          resolver_set = src.dependency_resolver_set
+
+          resolver_set = _namespaced_resolver_set(uri_dep.source_url)
 
           # Build a remapped request with the real gem name.
           remapped_dep = ::Gem::Dependency.new(uri_dep.gem_name, req.dependency.requirement, req.dependency.type)
           remapped_req = ::Gem::Resolver::DependencyRequest.new(remapped_dep, req.requester)
 
           resolver_set.find_all(remapped_req)
+        rescue StandardError => e
+          raise Namespaced::Gem::Error,
+                "Failed to resolve URI dependency #{req.name.inspect}: #{e.message}"
+        end
+
+        private
+
+        # Cache resolver sets per source URL to avoid repeated network lookups.
+        def _namespaced_resolver_set(source_url)
+          @_namespaced_resolver_sets ||= {}
+          @_namespaced_resolver_sets[source_url] ||= begin
+            src = ::Gem::Source.new(source_url)
+            src.dependency_resolver_set
+          end
         end
       end
     end

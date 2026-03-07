@@ -14,5 +14,8 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
-end
 
+  # Integration tests that hit the network are tagged :network.
+  # Exclude them by default; opt-in with: bundle exec rspec --tag network
+  config.filter_run_excluding :network unless config.inclusion_filter[:network]
+end

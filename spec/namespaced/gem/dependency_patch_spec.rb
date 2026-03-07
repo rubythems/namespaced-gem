@@ -16,23 +16,6 @@ RSpec.describe Namespaced::Gem::DependencyPatch do
       described_class.apply!
       expect(::Gem::Dependency.ancestors).to include(described_class::InstanceMethods)
     end
-
-    context "when VALID_NAME_PATTERN exists (older RubyGems)" do
-      before do
-        next unless ::Gem::Dependency.const_defined?(:VALID_NAME_PATTERN)
-
-        # Reset the patched flag so apply! runs again in the presence of the constant
-        ::Gem::Dependency.remove_instance_variable(:@namespaced_gem_patched)
-      end
-
-      it "replaces VALID_NAME_PATTERN with the widened URI pattern" do
-        skip "VALID_NAME_PATTERN not present in this RubyGems version" unless
-          ::Gem::Dependency.const_defined?(:VALID_NAME_PATTERN)
-
-        described_class.apply!
-        expect(::Gem::Dependency::VALID_NAME_PATTERN).to eq(described_class::WIDENED_URI_PATTERN)
-      end
-    end
   end
 
   describe "Gem::Dependency after patching" do
@@ -135,4 +118,3 @@ RSpec.describe Namespaced::Gem::DependencyPatch do
     end
   end
 end
-
