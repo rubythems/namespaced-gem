@@ -9,6 +9,7 @@ require_relative "gem/download_patch"
 require_relative "gem/bundler_integration"
 require_relative "gem/bundler_resolver_patch"
 require_relative "gem/gem_resolver_patch"
+require_relative "gem/metadata_deps_hook"
 
 module Namespaced
   # Namespaced::Gem is a RubyGems plugin/shim that enables gemspec dependencies

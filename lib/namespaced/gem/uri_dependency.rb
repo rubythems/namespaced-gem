@@ -9,7 +9,7 @@ module Namespaced
     #
     # Supported formats:
     #   Full URI:   "https://beta.gem.coop/@myspace/my-gem"
-    #   Shorthand:  "@myspace/my-gem"  (defaults to https://gem.coop)
+    #   Shorthand:  "@myspace/my-gem"  (defaults to https://beta.gem.coop)
     #   Package URL (purl-spec):
     #     "pkg:gem/@myspace/my-gem"
     #     "pkg:gem/@myspace/my-gem?repository_url=https://beta.gem.coop"
@@ -19,7 +19,7 @@ module Namespaced
     #   spec.add_dependency "https://beta.gem.coop/@myspace/my-gem", "~> 1.0"
     #   spec.add_dependency "pkg:gem/@myspace/my-gem", "~> 1.0"
     class UriDependency
-      DEFAULT_SERVER = "https://gem.coop"
+      DEFAULT_SERVER = "https://beta.gem.coop"
 
       # Pattern matching full HTTPS/HTTP URIs to a namespaced gem.
       # e.g. https://beta.gem.coop/@namespace/gem-name
@@ -33,7 +33,7 @@ module Namespaced
         \z
       }x
 
-      # Shorthand: @namespace/gem-name (no server; defaults to gem.coop)
+      # Shorthand: @namespace/gem-name (no server; defaults to beta.gem.coop)
       SHORTHAND_PATTERN = %r{
         \A
         (@[^/]+)              # namespace, e.g. @myspace

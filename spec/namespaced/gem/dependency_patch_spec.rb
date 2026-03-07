@@ -82,7 +82,7 @@ RSpec.describe Namespaced::Gem::DependencyPatch do
 
       it "exposes a parsed UriDependency with default server" do
         dep = ::Gem::Dependency.new(uri)
-        expect(dep.uri_dependency.server_base).to eq("https://gem.coop")
+        expect(dep.uri_dependency.server_base).to eq("https://beta.gem.coop")
         expect(dep.uri_dependency.gem_name).to eq("tool")
       end
     end

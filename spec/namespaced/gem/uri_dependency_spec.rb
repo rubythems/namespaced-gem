@@ -179,8 +179,8 @@ RSpec.describe Namespaced::Gem::UriDependency do
     context "with shorthand @namespace/gem-name" do
       let(:uri) { "@myorg/tool_kit" }
 
-      it "defaults server_base to gem.coop" do
-        expect(dep.server_base).to eq("https://gem.coop")
+      it "defaults server_base to beta.gem.coop" do
+        expect(dep.server_base).to eq("https://beta.gem.coop")
       end
 
       it "sets namespace" do
@@ -192,7 +192,7 @@ RSpec.describe Namespaced::Gem::UriDependency do
       end
 
       it "builds source_url correctly" do
-        expect(dep.source_url).to eq("https://gem.coop/@myorg")
+        expect(dep.source_url).to eq("https://beta.gem.coop/@myorg")
       end
     end
 
@@ -213,8 +213,8 @@ RSpec.describe Namespaced::Gem::UriDependency do
     context "with purl: pkg:gem/@namespace/name (default server)" do
       let(:uri) { "pkg:gem/@myspace/my-gem" }
 
-      it "defaults server_base to gem.coop" do
-        expect(dep.server_base).to eq("https://gem.coop")
+      it "defaults server_base to beta.gem.coop" do
+        expect(dep.server_base).to eq("https://beta.gem.coop")
       end
 
       it "sets namespace" do
@@ -226,7 +226,7 @@ RSpec.describe Namespaced::Gem::UriDependency do
       end
 
       it "builds source_url correctly" do
-        expect(dep.source_url).to eq("https://gem.coop/@myspace")
+        expect(dep.source_url).to eq("https://beta.gem.coop/@myspace")
       end
 
       it "preserves original" do
@@ -325,7 +325,7 @@ RSpec.describe Namespaced::Gem::UriDependency do
 
     it "expands shorthand to full URI" do
       dep = described_class.parse("@ns/foo")
-      expect(dep.to_s).to eq("https://gem.coop/@ns/foo")
+      expect(dep.to_s).to eq("https://beta.gem.coop/@ns/foo")
     end
 
     it "normalizes purl to full URI" do
@@ -348,7 +348,7 @@ RSpec.describe Namespaced::Gem::UriDependency do
     it "works for shorthand" do
       dep = described_class.parse("@ns/bar")
       expect(dep.inspect).to include('gem_name="bar"')
-      expect(dep.inspect).to include('source_url="https://gem.coop/@ns"')
+      expect(dep.inspect).to include('source_url="https://beta.gem.coop/@ns"')
     end
 
     it "works for purl" do
@@ -456,8 +456,8 @@ RSpec.describe Namespaced::Gem::UriDependency do
   end
 
   describe "DEFAULT_SERVER" do
-    it "is https://gem.coop" do
-      expect(described_class::DEFAULT_SERVER).to eq("https://gem.coop")
+    it "is https://beta.gem.coop" do
+      expect(described_class::DEFAULT_SERVER).to eq("https://beta.gem.coop")
     end
   end
 end

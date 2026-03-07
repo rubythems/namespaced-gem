@@ -102,7 +102,7 @@ The minimum required for `gem install` to work are:
 # Requires Ruby >= 3.2, RubyGems >= 4.0.5
 gem install namespaced-gem   # install the plugin first
 
-gem install @kaspth/oaken    # shorthand (defaults to https://gem.coop)
+gem install @kaspth/oaken    # shorthand (defaults to https://beta.gem.coop)
 # => ERROR: Zlib::DataError — incorrect header check
 
 gem install https://beta.gem.coop/@kaspth/oaken   # full URI

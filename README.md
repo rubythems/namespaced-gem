@@ -94,7 +94,7 @@ Parses a URI dependency name into its components:
 
 Supports three forms:
 - **Full URI**: `https://beta.gem.coop/@myspace/my-gem`
-- **Shorthand**: `@myspace/my-gem` (defaults to `https://gem.coop`)
+- **Shorthand**: `@myspace/my-gem` (defaults to `https://beta.gem.coop`)
 - **Package URL** ([purl-spec](https://github.com/package-url/purl-spec)):
   - `pkg:gem/@myspace/my-gem` (namespace in path, default server)
   - `pkg:gem/@myspace/my-gem?repository_url=https://beta.gem.coop` (explicit server)
@@ -148,7 +148,7 @@ Gem::Specification.new do |spec|
   # Namespaced dependency from gem.coop (full URI):
   spec.add_dependency "https://beta.gem.coop/@myspace/special-gem", "~> 0.5"
 
-  # Shorthand (defaults to gem.coop):
+  # Shorthand (defaults to beta.gem.coop):
   spec.add_dependency "@myorg/internal-tool", ">= 2.0"
 
   # Package URL (purl-spec):
