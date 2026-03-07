@@ -115,29 +115,27 @@ found in the gemspec.
 
 ## Usage
 
-### 1. Install this gem
+There are three ways to use `namespaced-gem`, depending on your situation.
 
-```bash
-gem install namespaced-gem
-```
+### Use Case 1: Gem authors (primary)
 
-Or add it to your project's `Gemfile`:
-
-```ruby
-gem "namespaced-gem"
-```
-
-### 2. Declare URI dependencies in your gemspec
+Add `namespaced-gem` as a runtime dependency of your gem. It is published on
+rubygems.org and acts as a bridge to gem.coop namespaces.
 
 ```ruby
 Gem::Specification.new do |spec|
-  spec.name    = "my-project"
+  spec.name    = "my-gem"
   spec.version = "1.0.0"
+
+  # This gem must be a runtime dependency so that its rubygems_plugin.rb
+  # is installed and loaded by RubyGems at boot — before any gemspec
+  # containing URI dependencies is evaluated.
+  spec.add_dependency "namespaced-gem"
 
   # Traditional dependency from RubyGems.org:
   spec.add_dependency "rack", "~> 3.0"
 
-  # Namespaced dependency from gem.coop:
+  # Namespaced dependency from gem.coop (full URI):
   spec.add_dependency "https://beta.gem.coop/@myspace/special-gem", "~> 0.5"
 
   # Shorthand (defaults to gem.coop):
@@ -145,15 +143,77 @@ Gem::Specification.new do |spec|
 end
 ```
 
-### 3. Your Gemfile stays simple
+When a user runs `gem install my-gem`, RubyGems installs `namespaced-gem` as
+a transitive dependency. On the next RubyGems boot the plugin is in the gem
+path and is loaded automatically — URI-named dependencies are then parsed,
+routed to the correct namespace source, and resolved transparently.
+
+No changes to the downstream user's Gemfile are required. If they use Bundler,
+their Gemfile can remain:
 
 ```ruby
 source "https://rubygems.org"
 gemspec
 ```
 
-The Bundler integration automatically resolves URI deps to their correct
-namespaced source.
+The Bundler integration automatically injects the correct `source` blocks for
+any URI dependencies found in the gemspec.
+
+### Use Case 2: Application developers
+
+If you are not publishing a gem but want to use URI-style dependencies in an
+application, install `namespaced-gem` directly:
+
+```bash
+gem install namespaced-gem
+```
+
+Because `rubygems_plugin.rb` files are only loaded from **installed** gems, the
+gem must be present in the gem path _before_ RubyGems evaluates any gemspec
+that contains URI dependencies. In practice this means:
+
+1. Install the gem first: `gem install namespaced-gem`
+2. Then declare URI dependencies in your gemspec or Gemfile as usual.
+
+> **Note:** Simply listing `gem "namespaced-gem"` in a Gemfile is _not
+> sufficient_ on its own — Bundler evaluates the Gemfile (and its `gemspec`
+> directive) before it installs gems, so the plugin would not yet be loaded.
+> The gem must already be installed via `gem install` (or as a transitive
+> dependency of another installed gem, as in Use Case 1).
+
+### Use Case 3: Global installation (enable namespace support Ruby-wide)
+
+Install `namespaced-gem` once into your Ruby environment and every subsequent
+`gem install` and `bundle install` in that Ruby will be able to resolve
+URI-named dependencies — no per-project configuration needed.
+
+```bash
+gem install namespaced-gem
+```
+
+That's it. The `rubygems_plugin.rb` is now in the gem path and will be loaded
+by RubyGems on every boot. From this point forward:
+
+- `gem install some-gem` will automatically resolve any URI-named transitive
+  dependencies found in `some-gem`'s gemspec.
+- `bundle install` in any project will automatically inject the correct
+  `source` blocks for URI dependencies found in gemspecs.
+
+This is useful for CI images, Docker containers, or development machines where
+you want namespace support available globally without requiring each gem or
+project to explicitly depend on `namespaced-gem`.
+
+```dockerfile
+# Example: Dockerfile
+RUN gem install namespaced-gem
+# All subsequent gem/bundle commands in this image now support URI deps.
+```
+
+```bash
+# Example: CI setup step
+gem install namespaced-gem
+bundle install   # URI deps in any gemspec are resolved automatically
+```
 
 ---
 
@@ -177,13 +237,20 @@ lib/
 
 ## Known Limitations
 
-1. **Plugin must be installed as a gem.** This gem works as a RubyGems plugin
-   (`rubygems_plugin.rb`), which means it must be *installed* — not just listed
-   in a Gemfile — so that RubyGems loads the plugin at boot before any gemspec
-   is evaluated. In Ruby 4.0+, RubyGems auto-loads `bundler/setup` when it
-   detects a Gemfile in the working directory, and this happens *before*
-   `RUBYOPT` `-r` flags are processed. The plugin must already be in the gem
-   path to intercept in time.
+1. **Plugin must be installed before first use (application developers only).**
+   This gem works as a RubyGems plugin (`rubygems_plugin.rb`), which means it
+   must be _installed_ in the gem path so that RubyGems loads the plugin at
+   boot before any gemspec containing URI dependencies is evaluated. For gem
+   authors (Use Case 1), this happens automatically — when a user installs your
+   gem, `namespaced-gem` is installed as a transitive dependency and available
+   on the next boot. For global installations (Use Case 3), the plugin is
+   already in the gem path by definition. For application developers
+   (Use Case 2), the gem must be installed explicitly with
+   `gem install namespaced-gem` before running `bundle install`, because
+   Bundler evaluates the Gemfile before it installs gems. In Ruby 4.0+,
+   RubyGems auto-loads `bundler/setup` when it detects a Gemfile in the working
+   directory, and this happens _before_ `RUBYOPT` `-r` flags are processed —
+   so the plugin must already be in the gem path.
 
 2. **Gemspec linting:** Tools that validate gemspecs (e.g. `gem build`, `rake
    release`) work fine because `SpecificationPolicy#validate_name` only
