@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "bundler"
+require "bundler/dsl"
 require "namespaced/gem"
 
 RSpec.configure do |config|
@@ -13,3 +15,4 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 end
+

@@ -8,18 +8,29 @@ Gem::Specification.new do |spec|
   spec.authors = ["Peter H. Boling"]
   spec.email = ["peter.boling@gmail.com"]
 
-  spec.summary = "TODO: Write a short summary, because RubyGems requires one."
-  spec.description = "TODO: Write a longer description or delete this line."
-  spec.homepage = "TODO: Put your gem's website or public repo URL here."
+  spec.summary = "RubyGems plugin enabling URI-style gemspec dependencies for namespaced gem sources (e.g. gem.coop namespaces)."
+  spec.description = <<~DESC
+    A RubyGems plugin/shim prototype that allows gemspec dependencies to be
+    declared as full URIs pointing to namespaced gem sources such as gem.coop
+    namespaces (e.g. `https://beta.gem.coop/@myspace/my-gem`).
+
+    When installed, this gem patches Gem::Dependency to accept URI-style names
+    and patches Bundler::Dsl to automatically inject the correct `source` blocks
+    when processing gemspecs — so the consuming project's Gemfile needs no
+    manual source declarations for URI-specified dependencies.
+
+    This is a feasibility prototype exploring the approach described in
+    https://github.com/gem-coop/gem.coop/issues/12.
+  DESC
+  spec.homepage = "https://gitlab.com/galtzo-floss/namespaced-gem"
   spec.required_ruby_version = ">= 3.2.0"
 
-  spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
+  spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "TODO: Put your gem's public repo URL here."
-  spec.metadata["changelog_uri"] = "TODO: Put your gem's CHANGELOG.md URL here."
+  spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/-/blob/main/CHANGELOG.md"
+  spec.metadata["rubygems_mfa_required"] = "true"
 
-  # Specify which files should be added to the gem when it is released.
-  # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   gemspec = File.basename(__FILE__)
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
@@ -30,10 +41,4 @@ Gem::Specification.new do |spec|
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
-
-  # Uncomment to register a new dependency of your gem
-  # spec.add_dependency "example-gem", "~> 1.0"
-
-  # For more information and examples about making a new gem, check out our
-  # guide at: https://bundler.io/guides/creating_gem.html
 end
