@@ -35,6 +35,9 @@ dependency, using the dependency name string alone?**
 
 ```ruby
 spec.add_dependency "https://beta.gem.coop/@myspace/my-gem", "~> 1.0"
+
+# or using a Package URL (purl-spec):
+spec.add_dependency "pkg:gem/@myspace/my-gem?repository_url=https://beta.gem.coop", "~> 1.0"
 ```
 
 ---
@@ -89,9 +92,16 @@ Parses a URI dependency name into its components:
 | `gem_name`    | `my-gem`                           |
 | `source_url`  | `https://beta.gem.coop/@myspace`   |
 
-Supports two forms:
+Supports three forms:
 - **Full URI**: `https://beta.gem.coop/@myspace/my-gem`
 - **Shorthand**: `@myspace/my-gem` (defaults to `https://gem.coop`)
+- **Package URL** ([purl-spec](https://github.com/package-url/purl-spec)):
+  - `pkg:gem/@myspace/my-gem` (namespace in path, default server)
+  - `pkg:gem/@myspace/my-gem?repository_url=https://beta.gem.coop` (explicit server)
+  - `pkg:gem/my-gem?repository_url=https://beta.gem.coop/@myspace` (namespace in qualifier)
+
+All three forms resolve to the same internal representation and are
+interchangeable anywhere a dependency name is accepted.
 
 ### 3. Bundler DSL integration (`BundlerIntegration`)
 
@@ -115,7 +125,7 @@ found in the gemspec.
 
 ## Usage
 
-There are three ways to use `namespaced-gem`, depending on your situation.
+There are three ways to use `namespaced-gem` today, depending on your situation.
 
 ### Use Case 1: Gem authors (primary)
 
@@ -140,16 +150,15 @@ Gem::Specification.new do |spec|
 
   # Shorthand (defaults to gem.coop):
   spec.add_dependency "@myorg/internal-tool", ">= 2.0"
+
+  # Package URL (purl-spec):
+  spec.add_dependency "pkg:gem/@myorg/another-tool", ">= 1.0"
+  spec.add_dependency "pkg:gem/@myorg/extra?repository_url=https://beta.gem.coop", "~> 3.0"
 end
 ```
 
-When a user runs `gem install my-gem`, RubyGems installs `namespaced-gem` as
-a transitive dependency. On the next RubyGems boot the plugin is in the gem
-path and is loaded automatically — URI-named dependencies are then parsed,
-routed to the correct namespace source, and resolved transparently.
-
-No changes to the downstream user's Gemfile are required. If they use Bundler,
-their Gemfile can remain:
+When a downstream user uses **Bundler** (the expected path), their Gemfile can
+remain:
 
 ```ruby
 source "https://rubygems.org"
@@ -157,7 +166,11 @@ gemspec
 ```
 
 The Bundler integration automatically injects the correct `source` blocks for
-any URI dependencies found in the gemspec.
+any URI dependencies found in the gemspec. Bundler uses only the Compact Index
+API, which gem.coop namespace servers already support.
+
+> **Note:** The `gem install my-gem` path (without Bundler) does not work yet.
+> See [Known Limitations](#known-limitations) for details.
 
 ### Use Case 2: Application developers
 
@@ -215,6 +228,30 @@ gem install namespaced-gem
 bundle install   # URI deps in any gemspec are resolved automatically
 ```
 
+### Future: Direct `gem install` with a namespace
+
+In theory, once `namespaced-gem` is installed you should be able to run:
+
+```bash
+gem install @kaspth/oaken
+gem install https://beta.gem.coop/@kaspth/oaken
+```
+
+The `GemResolverPatch` already intercepts RubyGems' resolver and correctly
+discovers the gem via the Compact Index (`versions` / `info/` endpoints).
+However, **this does not work yet** because `gem install` also requires the
+legacy Marshal API endpoints that gem.coop namespace servers do not currently
+serve:
+
+- `{source}/quick/Marshal.4.8/{gem}-{version}.gemspec.rz` — needed by
+  `Gem::Source#fetch_spec` to retrieve the full `Gem::Specification`
+- `{source}/gems/{gem}-{version}.gem` — needed to download the `.gem` file
+
+Until namespace servers implement these endpoints (under their namespace path,
+e.g. `https://beta.gem.coop/@kaspth/quick/...`), direct `gem install` of
+namespaced gems will fail. Bundler-based workflows (Use Cases 1–3) are
+unaffected because Bundler uses only the Compact Index.
+
 ---
 
 ## Architecture
@@ -256,6 +293,16 @@ lib/
    release`) work fine because `SpecificationPolicy#validate_name` only
    validates the gem's *own* name — it does not check dependency names.
 
+3. **`gem install` with a namespace does not work yet.** RubyGems' native
+   `gem install` code path requires two legacy server endpoints that gem.coop
+   namespace servers do not currently implement:
+   `quick/Marshal.4.8/{gem}-{ver}.gemspec.rz` (deflated Marshal-serialized
+   gemspec) and `gems/{gem}-{ver}.gem` (the `.gem` file itself). Both must be
+   served under the namespace path (e.g.
+   `https://beta.gem.coop/@kaspth/quick/…`). The Compact Index endpoints
+   (`versions`, `info/`) *are* served and work with Bundler, so all
+   Bundler-based workflows (Use Cases 1–3) are unaffected.
+
 ---
 
 ## Version Constraints
@@ -267,9 +314,17 @@ argument to `add_dependency`, completely separate from the name:
 spec.add_dependency "https://beta.gem.coop/@myspace/my-gem", "~> 1.0"
 #                    ^^^^^^^^^^ URI name ^^^^^^^^^^^^^^^^^^   ^^^^^^^^
 #                                                             version
+
+spec.add_dependency "pkg:gem/@myspace/my-gem", "~> 1.0"
+#                    ^^^^^^^ purl name ^^^^^^   ^^^^^^^^
+#                                               version
 ```
 
 All standard operators (`~>`, `>=`, `=`, etc.) are supported unchanged.
+
+> **Note:** The purl spec allows a `@version` component in the name itself
+> (e.g. `pkg:gem/@ns/foo@2.0`). If present it is **ignored** — version
+> constraints always come from the second argument to `add_dependency`.
 
 ---
 

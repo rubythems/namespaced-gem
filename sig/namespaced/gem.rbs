@@ -9,6 +9,7 @@ module Namespaced
       DEFAULT_SERVER: String
       FULL_URI_PATTERN: Regexp
       SHORTHAND_PATTERN: Regexp
+      PURL_PATTERN: Regexp
 
       attr_reader original: String
       attr_reader server_base: String
@@ -26,6 +27,11 @@ module Namespaced
       def hash: () -> Integer
       def to_s: () -> String
       def inspect: () -> String
+
+      private
+
+      def parse_purl: (MatchData match) -> void
+      def parse_qualifiers: (String? raw) -> Hash[String, String]
     end
 
     module DependencyPatch

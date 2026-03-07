@@ -85,6 +85,44 @@ RSpec.describe Namespaced::Gem::UriDependency do
         expect(described_class.uri?("https://beta.gem.coop/noat/foo")).to be false
       end
     end
+
+    context "with purl (Package URL)" do
+      it "returns true for pkg:gem/@namespace/name" do
+        expect(described_class.uri?("pkg:gem/@myspace/my-gem")).to be true
+      end
+
+      it "returns true for pkg:gem/@namespace/name with repository_url" do
+        expect(described_class.uri?("pkg:gem/@myspace/my-gem?repository_url=https://beta.gem.coop")).to be true
+      end
+
+      it "returns true for pkg:gem/name with repository_url containing namespace" do
+        expect(described_class.uri?("pkg:gem/my-gem?repository_url=https://beta.gem.coop/@myspace")).to be true
+      end
+
+      it "returns true for pkg:gem with a version component" do
+        expect(described_class.uri?("pkg:gem/@ns/oaken@2.5.1")).to be true
+      end
+
+      it "returns true for pkg:gem with version and qualifier" do
+        expect(described_class.uri?("pkg:gem/@ns/oaken@2.5.1?repository_url=https://beta.gem.coop")).to be true
+      end
+
+      it "returns true for pkg:gem with dotted gem name" do
+        expect(described_class.uri?("pkg:gem/@ns/my.gem")).to be true
+      end
+
+      it "returns false for pkg:npm (wrong type)" do
+        expect(described_class.uri?("pkg:npm/@ns/foo")).to be false
+      end
+
+      it "returns false for pkg:gem with no name" do
+        expect(described_class.uri?("pkg:gem/")).to be false
+      end
+
+      it "returns false for pkg:gem alone" do
+        expect(described_class.uri?("pkg:gem")).to be false
+      end
+    end
   end
 
   describe ".parse" do
@@ -171,6 +209,112 @@ RSpec.describe Namespaced::Gem::UriDependency do
         expect { described_class.parse("https://example.com/foo") }.to raise_error(ArgumentError)
       end
     end
+
+    context "with purl: pkg:gem/@namespace/name (default server)" do
+      let(:uri) { "pkg:gem/@myspace/my-gem" }
+
+      it "defaults server_base to gem.coop" do
+        expect(dep.server_base).to eq("https://gem.coop")
+      end
+
+      it "sets namespace" do
+        expect(dep.namespace).to eq("@myspace")
+      end
+
+      it "sets gem_name" do
+        expect(dep.gem_name).to eq("my-gem")
+      end
+
+      it "builds source_url correctly" do
+        expect(dep.source_url).to eq("https://gem.coop/@myspace")
+      end
+
+      it "preserves original" do
+        expect(dep.original).to eq(uri)
+      end
+    end
+
+    context "with purl: pkg:gem/@namespace/name?repository_url=..." do
+      let(:uri) { "pkg:gem/@kaspth/oaken?repository_url=https://beta.gem.coop" }
+
+      it "sets server_base from repository_url qualifier" do
+        expect(dep.server_base).to eq("https://beta.gem.coop")
+      end
+
+      it "sets namespace from purl path" do
+        expect(dep.namespace).to eq("@kaspth")
+      end
+
+      it "sets gem_name" do
+        expect(dep.gem_name).to eq("oaken")
+      end
+
+      it "builds source_url correctly" do
+        expect(dep.source_url).to eq("https://beta.gem.coop/@kaspth")
+      end
+    end
+
+    context "with purl: pkg:gem/name?repository_url=.../@namespace" do
+      let(:uri) { "pkg:gem/oaken?repository_url=https://beta.gem.coop/@kaspth" }
+
+      it "extracts server_base from the repository_url host" do
+        expect(dep.server_base).to eq("https://beta.gem.coop")
+      end
+
+      it "extracts namespace from the repository_url path" do
+        expect(dep.namespace).to eq("@kaspth")
+      end
+
+      it "sets gem_name" do
+        expect(dep.gem_name).to eq("oaken")
+      end
+
+      it "builds source_url correctly" do
+        expect(dep.source_url).to eq("https://beta.gem.coop/@kaspth")
+      end
+    end
+
+    context "with purl containing a @version (ignored)" do
+      let(:uri) { "pkg:gem/@ns/oaken@2.5.1" }
+
+      it "ignores the version and sets gem_name correctly" do
+        expect(dep.gem_name).to eq("oaken")
+      end
+
+      it "sets namespace" do
+        expect(dep.namespace).to eq("@ns")
+      end
+    end
+
+    context "with purl: pkg:gem/name?repository_url=...with port" do
+      let(:uri) { "pkg:gem/foo?repository_url=http://localhost:9292/@dev" }
+
+      it "includes the port in server_base" do
+        expect(dep.server_base).to eq("http://localhost:9292")
+      end
+
+      it "extracts namespace" do
+        expect(dep.namespace).to eq("@dev")
+      end
+
+      it "sets gem_name" do
+        expect(dep.gem_name).to eq("foo")
+      end
+    end
+
+    context "with invalid purl" do
+      it "raises ArgumentError for pkg:gem/name without namespace or repository_url" do
+        expect { described_class.parse("pkg:gem/my-gem") }.to raise_error(
+          ArgumentError, /must include a @namespace/
+        )
+      end
+
+      it "raises ArgumentError for pkg:gem/name?repository_url= without namespace" do
+        expect { described_class.parse("pkg:gem/my-gem?repository_url=https://example.com") }.to raise_error(
+          ArgumentError, /must include a @namespace/
+        )
+      end
+    end
   end
 
   describe "#to_s" do
@@ -182,6 +326,16 @@ RSpec.describe Namespaced::Gem::UriDependency do
     it "expands shorthand to full URI" do
       dep = described_class.parse("@ns/foo")
       expect(dep.to_s).to eq("https://gem.coop/@ns/foo")
+    end
+
+    it "normalizes purl to full URI" do
+      dep = described_class.parse("pkg:gem/@ns/foo?repository_url=https://beta.gem.coop")
+      expect(dep.to_s).to eq("https://beta.gem.coop/@ns/foo")
+    end
+
+    it "normalizes purl with embedded namespace to full URI" do
+      dep = described_class.parse("pkg:gem/foo?repository_url=https://beta.gem.coop/@ns")
+      expect(dep.to_s).to eq("https://beta.gem.coop/@ns/foo")
     end
   end
 
@@ -195,6 +349,12 @@ RSpec.describe Namespaced::Gem::UriDependency do
       dep = described_class.parse("@ns/bar")
       expect(dep.inspect).to include('gem_name="bar"')
       expect(dep.inspect).to include('source_url="https://gem.coop/@ns"')
+    end
+
+    it "works for purl" do
+      dep = described_class.parse("pkg:gem/@kaspth/oaken?repository_url=https://beta.gem.coop")
+      expect(dep.inspect).to include('gem_name="oaken"')
+      expect(dep.inspect).to include('source_url="https://beta.gem.coop/@kaspth"')
     end
   end
 
@@ -227,6 +387,26 @@ RSpec.describe Namespaced::Gem::UriDependency do
 
     it "satisfies eql? for equal objects" do
       expect(dep_a).to eql(dep_b)
+    end
+
+    context "cross-format equality" do
+      it "considers a purl and full URI equal when they resolve to the same gem" do
+        from_uri  = described_class.parse("https://beta.gem.coop/@kaspth/oaken")
+        from_purl = described_class.parse("pkg:gem/@kaspth/oaken?repository_url=https://beta.gem.coop")
+        expect(from_purl).to eq(from_uri)
+      end
+
+      it "considers a purl with embedded namespace and full URI equal" do
+        from_uri  = described_class.parse("https://beta.gem.coop/@kaspth/oaken")
+        from_purl = described_class.parse("pkg:gem/oaken?repository_url=https://beta.gem.coop/@kaspth")
+        expect(from_purl).to eq(from_uri)
+      end
+
+      it "considers a shorthand and purl equal when they resolve to the same gem" do
+        from_shorthand = described_class.parse("@myspace/tool")
+        from_purl      = described_class.parse("pkg:gem/@myspace/tool")
+        expect(from_purl).to eq(from_shorthand)
+      end
     end
   end
 
