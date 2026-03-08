@@ -14,10 +14,11 @@ Gem::Specification.new do |spec|
     URIs pointing to namespaced gem sources such as gem.coop namespaces
     (e.g. `https://beta.gem.coop/@myspace/my-gem`).
 
-    When installed, this gem patches Gem::Dependency to accept URI-style names
-    and patches Bundler::Dsl to automatically inject the correct `source` blocks
-    when processing gemspecs — so the consuming project's Gemfile needs no
-    manual source declarations for URI-specified dependencies.
+    When installed, this gem patches both RubyGems' native resolver (`gem
+    install`) and Bundler's resolver (`bundle install`) to parse URI dependency
+    names, route them to the correct namespace source, and remap transitive deps
+    on the fly — so `gem install @kaspth/oaken` and `bundle install` with URI
+    deps in gemspecs both Just Work™.
 
     See https://github.com/gem-coop/gem.coop/issues/12 for the original discussion.
   DESC

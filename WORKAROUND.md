@@ -1,3 +1,7 @@
+**STATUS: RESOLVED — Approach B was implemented.** `ApiSpecPatch` synthesizes specs from Compact Index data (bypassing the Marshal endpoint), `DownloadPatch` handles namespace download errors, and `beta.gem.coop` serves `/gems/` under namespace paths. Both `gem install @kaspth/oaken` and `bundle install` with URI deps now work.
+
+---
+
 Plan: Two Approaches for gem install @kaspth/oaken with Compact Index-Only Servers
 The namespaced-gem plugin already handles Bundler workflows, but gem install fails because RubyGems requires two legacy Marshal API endpoints (quick/Marshal.4.8/… and gems/…) that gem.coop namespace servers don't serve. Two approaches can bridge this gap: (A) delegate to Bundler's infrastructure, or (B) patch RubyGems' native classes to use the Compact Index.
 

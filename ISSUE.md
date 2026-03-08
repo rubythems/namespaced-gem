@@ -1,12 +1,13 @@
-# gem.coop namespace servers missing legacy Marshal API endpoints required by `gem install`
+# gem.coop namespace servers missing legacy Marshal API endpoints
 
 ## Summary
 
 `beta.gem.coop` namespace servers implement only the **Compact Index** API
-(used by Bundler), but not the **legacy Marshal API** (used by `gem install`).
-This means `gem install @kaspth/oaken` fails even when the
-[namespaced-gem](https://gitlab.com/galtzo-floss/namespaced-gem) plugin is
-installed and correctly intercepts the resolver.
+(used by Bundler) and the `/gems/` download endpoint, but not the **legacy
+Marshal API** (`quick/Marshal.4.8/`). The
+[namespaced-gem](https://gitlab.com/galtzo-floss/namespaced-gem) plugin works
+around this by synthesizing `Gem::Specification` objects from Compact Index data
+(via `ApiSpecPatch`), so **both `bundle install` and `gem install` now work**.
 
 A secondary issue: the production `gem.coop` server returns **HTTP 200 with
 body `"404"`** for namespace endpoints, instead of a proper HTTP 404 status
@@ -157,15 +158,16 @@ ERROR:  While executing gem ... (Zlib::DataError)
 |---|---|---|
 | `bundle lock` / `bundle install` with URI deps in gemspec | Compact Index only | ✅ |
 | `bundler/inline` with a namespace source block | Compact Index only | ✅ |
-| `gem install @kaspth/oaken` (direct) | Marshal API + gem download | ❌ |
-| `gem install my-gem` (transitive URI deps, plugin pre-installed) | Marshal API + gem download | ❌ |
+| `gem install @kaspth/oaken` (direct, plugin pre-installed) | Compact Index + gem download | ✅ |
+| `gem install my-gem` (transitive URI deps, plugin pre-installed) | Compact Index + gem download | ✅ |
 | `gem install my-gem` (transitive URI deps, plugin NOT pre-installed) | N/A — plugin not loaded | ❌ |
 
-The Bundler path works because Bundler uses **only** the Compact Index
-(`versions` + `info/`) for resolution and has its own gem download mechanism.
-The `gem install` path fails because RubyGems' native resolver also requires
-the legacy `quick/Marshal.4.8/` endpoint for spec fetching and
-`gems/` for `.gem` file downloads — both under the namespace path.
+All code paths now work when the `namespaced-gem` plugin is installed, thanks
+to `ApiSpecPatch` (which synthesizes specs from Compact Index data, bypassing
+the missing `quick/Marshal.4.8/` endpoint) and the namespace server's `/gems/`
+download endpoint. The only remaining failure case is the cold-start scenario
+where the plugin is not yet installed — RubyGems loads plugins only from
+already-installed gems at boot.
 
 ---
 

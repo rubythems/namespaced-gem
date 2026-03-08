@@ -1,9 +1,10 @@
 # Hot-Load Analysis: Can `Gem::Installer#load_plugin` Solve the Chicken-and-Egg Problem?
 
-**TL;DR — No, not directly.** The hot-load fires during **installation**, but
-the failure occurs during **resolution**, which runs first. However, the
-hot-load mechanism opens the door to a **metadata-based two-phase approach**
-that could make single-command `gem install my-gem` work.
+**TL;DR — The hot-load alone cannot solve the cold-start resolution problem
+(resolution runs before installation), but it enables a metadata-based
+two-phase approach via `MetadataDepsHook`. More importantly, when the plugin is
+pre-installed (the common case), all `gem install` paths work today — including
+direct `gem install @kaspth/oaken`.**
 
 ---
 
@@ -60,12 +61,13 @@ URI dependency string, has no patch to intercept it, queries the default source
 
 ### Use Case 1: Gem Authors (`gem install my-gem`, first time)
 
-**Hot-load: too late.** Resolution fails before install begins.
+**Hot-load: too late for cold-start.** When the plugin is NOT pre-installed,
+resolution fails before install begins.
 
-Even if resolution somehow passed, two additional blockers exist:
-1. `ApiSpecPatch` (which synthesizes specs from Compact Index data instead of
-   the missing Marshal endpoint) isn't loaded yet.
-2. `DownloadPatch` (for clear namespace download errors) isn't loaded yet.
+However, when the plugin IS pre-installed (Use Cases 2–4), `gem install my-gem`
+with URI deps in the gemspec **works today** — `GemResolverPatch` intercepts
+the resolver, `ApiSpecPatch` synthesizes specs from Compact Index data, and
+`DownloadPatch` handles namespace download errors.
 
 **For the Bundler path** (`bundle install` with `gemspec`), the hot-load is
 **irrelevant** — the existing `BundlerIntegration` TracePoint approach already
@@ -264,38 +266,39 @@ resolver's conflict-handling to treat URI deps as "deferred" rather than
 
 ### Recommendation
 
-**For `gem install` (Use Case 1):** Implement **Approach A** (metadata-based
-deps + `done_installing` hook). This is the only approach that reliably enables
-single-command `gem install my-gem` via the hot-load mechanism. The
-`rubygems_plugin.rb` already registers hooks at load time; adding a
-`done_installing` hook that processes `metadata["namespaced_dependencies"]` is
-a natural extension.
+**For `gem install` (Use Cases 2–4, plugin pre-installed):** This **already
+works**. `GemResolverPatch` intercepts URI deps during resolution,
+`ApiSpecPatch` synthesizes specs from Compact Index data (bypassing the missing
+Marshal endpoint), and the namespace server serves `/gems/` for downloads.
+
+**For `gem install my-gem` (Use Case 1, cold-start):** **Approach A** has been
+implemented as `MetadataDepsHook` (metadata-based deps + `done_installing`
+hook). This enables single-command `gem install my-gem` via the hot-load
+mechanism when gem authors encode URI deps in
+`spec.metadata["namespaced_dependencies"]`.
 
 **For Bundler (all use cases):** The current architecture is already correct.
 The `BundlerIntegration` TracePoint-based deferred patching handles URI deps
 in `add_dependency` seamlessly. **No changes needed.**
 
 **For `gem install` of direct URI names** (`gem install @kaspth/oaken`):
-The hot-load is irrelevant here (the plugin must already be installed). This
-path depends on the server serving `/gems/` under the namespace path
-(ISSUE.md). No change from current status.
+This **works today** (plugin must be pre-installed). The namespace server
+serves both the Compact Index and `/gems/` endpoints.
 
-### Next Steps
+### Implementation Status (completed)
 
-1. Create `lib/namespaced/gem/metadata_deps_hook.rb` implementing a
-   `Gem.done_installing` hook that reads `namespaced_dependencies` from
-   installed specs' metadata and triggers a second install pass.
-2. Wire it into `rubygems_plugin.rb` alongside the existing patches.
-3. Document the `metadata["namespaced_dependencies"]` convention for gem
-   authors who want single-command `gem install` support.
-4. Keep `add_dependency` URI support for the Bundler path (it works today).
-5. Consider whether gem authors should use a helper method
-   (`Namespaced::Gem.add_namespaced_dependency(spec, uri, version)`) that
-   writes both `add_dependency` and `metadata` automatically.
+1. ✅ `lib/namespaced/gem/metadata_deps_hook.rb` — `Gem.done_installing` hook
+   that reads `namespaced_dependencies` from installed specs' metadata and
+   triggers a second install pass.
+2. ✅ Wired into `rubygems_plugin.rb` alongside existing patches (step 6).
+3. ✅ `Namespaced::Gem.add_namespaced_dependency(spec, uri, version)` helper
+   that writes both `add_dependency` and `metadata` automatically.
+4. ✅ `add_dependency` URI support works for both the Bundler and
+   `gem install` paths (when plugin is pre-installed).
 
 ---
 
-## The Hot-Load Mechanism IS Valuable — Just Not for Resolution
+## The Hot-Load Mechanism IS Valuable
 
 The discovery in HOT_HOOK.md is genuinely important. It confirms that:
 
@@ -311,6 +314,12 @@ The discovery in HOT_HOOK.md is genuinely important. It confirms that:
 
 The key insight is that **hooks fire post-install, not post-resolve**. The
 hot-load enables a **second-phase install** pattern where URI deps are deferred
-past the initial resolution and handled by hooks after the plugin is live. This
-is a viable, if non-standard, architecture for bridging the gap until RubyGems
-natively supports source-qualified dependency names.
+past the initial resolution and handled by hooks after the plugin is live.
+This pattern is implemented in `MetadataDepsHook` and enables the cold-start
+`gem install my-gem` path (when the gem author uses
+`spec.metadata["namespaced_dependencies"]`).
+
+For the pre-installed plugin case (Use Cases 2–4), the hot-load is not needed —
+the plugin loads at boot and all patches are active for the entire `gem install`
+pipeline, including resolution. **Both `gem install @kaspth/oaken` and
+`gem install my-gem` (with URI deps in the gemspec) work today.**

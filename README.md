@@ -125,7 +125,7 @@ found in the gemspec.
 
 ## Usage
 
-There are three ways to use `namespaced-gem` today, depending on your situation.
+There are four ways to use `namespaced-gem` today, depending on your situation.
 
 ### Use Case 1: Gem authors (primary)
 
@@ -169,8 +169,9 @@ The Bundler integration automatically injects the correct `source` blocks for
 any URI dependencies found in the gemspec. Bundler uses only the Compact Index
 API, which gem.coop namespace servers already support.
 
-> **Note:** The `gem install my-gem` path (without Bundler) does not work yet.
-> See [Known Limitations](#known-limitations) for details.
+Both `bundle install` and `gem install my-gem` work — see
+[Use Case 4](#use-case-4-direct-gem-install-with-a-namespace) for the
+`gem install` path.
 
 ### Use Case 2: Application developers
 
@@ -228,29 +229,36 @@ gem install namespaced-gem
 bundle install   # URI deps in any gemspec are resolved automatically
 ```
 
-### Future: Direct `gem install` with a namespace
+### Use Case 4: Direct `gem install` with a namespace
 
-In theory, once `namespaced-gem` is installed you should be able to run:
+Once `namespaced-gem` is installed, you can install namespaced gems directly:
+
+```bash
+gem install namespaced-gem         # one-time setup (if not already installed)
+
+gem install @kaspth/oaken          # shorthand (defaults to beta.gem.coop)
+gem install https://beta.gem.coop/@kaspth/oaken   # full URI
+```
+
+This works because the plugin patches multiple layers of RubyGems' native
+`gem install` pipeline:
+
+1. **`GemResolverPatch`** intercepts the resolver and routes URI-named
+   dependencies to the correct namespace source via the Compact Index
+   (`versions` / `info/` endpoints).
+2. **`ApiSpecPatch`** synthesizes a `Gem::Specification` from the Compact Index
+   data already fetched — bypassing the legacy `quick/Marshal.4.8/` endpoint
+   that namespace servers don't serve.
+3. **`DownloadPatch`** provides clear, actionable error messages if the
+   namespace server fails to serve the `.gem` file.
+
+All three forms of URI dependency names are supported:
 
 ```bash
 gem install @kaspth/oaken
 gem install https://beta.gem.coop/@kaspth/oaken
+gem install "pkg:gem/@kaspth/oaken"
 ```
-
-The `GemResolverPatch` already intercepts RubyGems' resolver and correctly
-discovers the gem via the Compact Index (`versions` / `info/` endpoints).
-However, **this does not work yet** because `gem install` also requires the
-legacy Marshal API endpoints that gem.coop namespace servers do not currently
-serve:
-
-- `{source}/quick/Marshal.4.8/{gem}-{version}.gemspec.rz` — needed by
-  `Gem::Source#fetch_spec` to retrieve the full `Gem::Specification`
-- `{source}/gems/{gem}-{version}.gem` — needed to download the `.gem` file
-
-Until namespace servers implement these endpoints (under their namespace path,
-e.g. `https://beta.gem.coop/@kaspth/quick/...`), direct `gem install` of
-namespaced gems will fail. Bundler-based workflows (Use Cases 1–3) are
-unaffected because Bundler uses only the Compact Index.
 
 ---
 
@@ -258,16 +266,20 @@ unaffected because Bundler uses only the Compact Index.
 
 ```
 lib/
-  rubygems_plugin.rb              # Loaded by RubyGems at boot
+  rubygems_plugin.rb              # Loaded by RubyGems at boot (or hot-loaded during install)
   namespaced/
     gem.rb                        # Main module
     gem/
       version.rb
       uri_dependency.rb           # URI parser (value object)
+      namespace_source_registry.rb # Thread-safe registry of namespace source URLs
       dependency_patch.rb         # Gem::Dependency patch (helper methods)
+      api_spec_patch.rb           # Gem::Resolver::APISpecification — Compact Index spec synthesis
+      download_patch.rb           # Gem::Source#download — namespace download error handling
       bundler_integration.rb      # Bundler::Dsl#gemspec patch
       bundler_resolver_patch.rb   # Bundler::Definition / Resolver transitive dep handling
       gem_resolver_patch.rb       # Gem::RequestSet / InstallerSet for `gem install`
+      metadata_deps_hook.rb       # Gem.done_installing hook for hot-load deferred deps
 ```
 
 ---
@@ -293,15 +305,12 @@ lib/
    release`) work fine because `SpecificationPolicy#validate_name` only
    validates the gem's *own* name — it does not check dependency names.
 
-3. **`gem install` with a namespace does not work yet.** RubyGems' native
-   `gem install` code path requires two legacy server endpoints that gem.coop
-   namespace servers do not currently implement:
-   `quick/Marshal.4.8/{gem}-{ver}.gemspec.rz` (deflated Marshal-serialized
-   gemspec) and `gems/{gem}-{ver}.gem` (the `.gem` file itself). Both must be
-   served under the namespace path (e.g.
-   `https://beta.gem.coop/@kaspth/quick/…`). The Compact Index endpoints
-   (`versions`, `info/`) *are* served and work with Bundler, so all
-   Bundler-based workflows (Use Cases 1–3) are unaffected.
+3. **`gem.coop` (production) returns HTTP 200 with body `"404"` for namespace
+   endpoints.** Namespace resolution only works against `beta.gem.coop`
+   currently. The production `gem.coop` server returns HTTP 200 with a
+   plain-text body of `"404"` for namespace paths, which RubyGems
+   misinterprets as valid Compact Index data. The shorthand default server is
+   `beta.gem.coop` for this reason. See [ISSUE.md](ISSUE.md) for details.
 
 ---
 
