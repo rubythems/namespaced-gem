@@ -8,9 +8,9 @@ Gem::Specification.new do |spec|
   spec.authors = ["Peter H. Boling"]
   spec.email = ["peter.boling@gmail.com"]
 
-  spec.summary = "RubyGems plugin enabling URI-style gemspec dependencies for namespaced gem sources (e.g. gem.coop namespaces)."
+  spec.summary = "🔌 RubyGems plugin enabling URI-style gemspec dependencies for namespaced gem sources (e.g. gem.coop namespaces)."
   spec.description = <<~DESC
-    A RubyGems plugin that allows gemspec dependencies to be declared as full
+    🔌 A RubyGems plugin that allows gemspec dependencies to be declared as full
     URIs pointing to namespaced gem sources such as gem.coop namespaces
     (e.g. `https://beta.gem.coop/@myspace/my-gem`).
 

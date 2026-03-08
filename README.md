@@ -1,4 +1,4 @@
-# namespaced-gem
+# 🔌 namespaced-gem
 
 A RubyGems plugin that enables gemspec dependencies to be declared as
 full URIs, pointing to **namespaced gem sources** such as
