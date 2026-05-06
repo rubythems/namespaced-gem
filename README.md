@@ -360,10 +360,10 @@ Bug reports and pull requests are welcome on GitLab at
 
 This project is intended to be a safe, welcoming space for collaboration, and
 contributors are expected to adhere to the
-[code of conduct](https://gitlab.com/galtzo-floss/namespaced-gem/-/blob/main/CODE_OF_CONDUCT.md).
+[code of conduct](https://gitlab.com/rubythems/namespaced-gem/-/blob/main/CODE_OF_CONDUCT.md).
 
 ## Code of Conduct
 
 Everyone interacting in the namespaced-gem project's codebases, issue trackers,
 chat rooms and mailing lists is expected to follow the
-[code of conduct](https://gitlab.com/galtzo-floss/namespaced-gem/-/blob/main/CODE_OF_CONDUCT.md).
+[code of conduct](https://gitlab.com/rubythems/namespaced-gem/-/blob/main/CODE_OF_CONDUCT.md).
