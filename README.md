@@ -1,5 +1,12 @@
 # 🔌 namespaced-gem
 
+> **Retired experiment:** `namespaced-gem` was a prototype for URI and
+> namespace-aware gem dependencies. That experiment bore fruit in
+> `gemserver-purl` and the related preset gems, including
+> `gemserver-gem_coop` and `gemserver-gems_bridgetownrb_com`. New work should
+> use those gems instead; this project remains as historical context for the
+> original investigation.
+
 A RubyGems plugin that enables gemspec dependencies to be declared as
 full URIs, pointing to **namespaced gem sources** such as
 [gem.coop namespaces](https://gem.coop/updates/5/).
